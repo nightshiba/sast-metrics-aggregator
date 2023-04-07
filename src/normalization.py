@@ -70,7 +70,7 @@ class RuleConverter:
             'json': [],
             'bash': ['sh', 'shell'],
             'dockerfile': ['docker'],
-            'terraform': ['hcl']
+            'terraform': ['hcl', 'cloudformation'],
         }
         new_languages = set()
         for language in languages:
@@ -169,10 +169,8 @@ class SemgrepRuleConverter(RuleConverter):
         return severity_map[rule.metadata['severity']]
 
     def get_cwe(self, rule: RawSecurityRule) -> List[str]:
-        cwes = []
-        if 'cwe' in rule.metadata:
-            raw_cwe = rule.metadata['cwe']
-            cwes = [raw_cwe] if isinstance(raw_cwe, str) else raw_cwe
+        raw_cwes = rule.metadata['metadata'].get('cwe', [])
+        cwes = [raw_cwes] if isinstance(raw_cwes, str) else raw_cwes
         return [cwe.split(':')[0] for cwe in cwes]
 
     def get_languages(self, rule: RawSecurityRule) -> List[str]:
