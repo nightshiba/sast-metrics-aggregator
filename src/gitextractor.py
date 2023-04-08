@@ -69,7 +69,8 @@ class SonarQubeRulesRepo(GitSecurityRulesRepo):
     @staticmethod
     def filter_security_rules(raw_rules: List[RawSecurityRule]) -> List[RawSecurityRule]:
         return [rule for rule in raw_rules if
-                rule.metadata['type'] in ['SECURITY_HOTSPOT', 'VULNERABILITY'] and rule.metadata['status'] == 'ready']
+                rule.metadata['type'] in ['SECURITY_HOTSPOT', 'VULNERABILITY'] and rule.metadata['status'] in ['ready',
+                                                                                                               'beta']]
 
     @staticmethod
     def filter_available_rules(raw_rules: List[RawSecurityRule], available_rule_keys: AvailableRuleKeys) -> \
@@ -148,12 +149,16 @@ class SemgrepRulesRepo(GitSecurityRulesRepo):
 
 class CodeQLRulesRepo(GitSecurityRulesRepo):
     def __init__(self):
-        super().__init__('https://github.com/github/codeql',
-                         ['**/src/**/Security/**/*.ql', '**/src/**/security/**/*.ql'])
+        super().__init__('https://github.com/github/codeql', ['**/ql/src/**/*.ql'])
 
     @staticmethod
     def is_rule(raw_rule: RawSecurityRule) -> bool:
-        return "count-untrusted-data-external-api" not in raw_rule.metadata['id']
+        return 'id' in raw_rule.metadata and "count-untrusted-data-external-api" not in raw_rule.metadata['id']
+
+    @staticmethod
+    def filter_security_rules(raw_rules: List[RawSecurityRule]) -> List[RawSecurityRule]:
+        return [rule for rule in raw_rules if
+                not rule.metadata['id'].startswith('ql/') and 'security' in rule.metadata.get('tags', '').split()]
 
     @staticmethod
     def load_ql(ql_raw_data: str) -> dict:
@@ -183,7 +188,7 @@ class CodeQLRulesRepo(GitSecurityRulesRepo):
 
             if self.is_rule(raw_rule):
                 new_raw_rules.append(raw_rule)
-        self.raw_rules = new_raw_rules
+        self.raw_rules = self.filter_security_rules(new_raw_rules)
 
 
 class JoernRulesRepo(GitSecurityRulesRepo):

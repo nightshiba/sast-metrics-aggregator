@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from pathlib import PurePath
 from typing import List
@@ -5,6 +6,7 @@ from typing import List
 from gitextractor import RawSecurityRule, GitSecurityRulesRepo, SonarQubeRulesRepo, SemgrepRulesRepo, CodeQLRulesRepo, \
     JoernRulesRepo
 from models import ComparableRule
+from owasp_cwe_mapping import OwaspCweMapper
 
 
 class RuleEqualizer:
@@ -44,17 +46,17 @@ class RuleConverter:
     @staticmethod
     def normalize_languages(languages: List[str]) -> List[str]:
         language_map = {
-            'c': ['cfamily'],
-            'c++': ['cpp', 'cfamily'],
+            # SonarQube doesn't distinguish between C and C++
+            'c/c++': ['cpp', 'c++', 'c', 'cfamily'],
+            # Joern and CodeQL don't distinguish between Java and Kotlin
+            'kotlin/java': ['java', 'kotlin', 'kt', 'android'],
+            # CodeQL doesn't distinguish between JavaScript and TypeScript
+            'js/ts': ['js', 'ts', 'javascript', 'typescript'],
             'c#': ['csharp'],
-            'java': [],
-            'javascript': ['js'],
-            'typescript': ['ts'],
             'python': ['py'],
             'ruby': ['rb'],
             'go': [],
             'php': [],
-            'kotlin': ['kt'],
             'scala': [],
             'rust': [],
             'swift': [],
@@ -85,14 +87,18 @@ class RuleConverter:
         return list(new_languages)
 
     def convert(self, rule: RawSecurityRule) -> ComparableRule:
-        cwe = self._upper_list(self.get_cwe(rule))
+        cwes = self._upper_list(self.get_cwes(rule))
         languages = self.normalize_languages(self._lower_list(self.get_languages(rule)))
+        owasp_categories = []
+        with contextlib.closing(OwaspCweMapper()) as mapper:
+            owasp_categories = [mapper.fetch_short_mapping(cwe) for cwe in cwes]
         return ComparableRule(
             rule_id=rule.id,
             name=self.get_name(rule),
             description=self.get_description(rule),
             severity=self.get_severity(rule),
-            cwe=cwe,
+            cwes=cwes,
+            owasp_categories=owasp_categories,
             languages=languages,
             data_source=self.data_source,
             is_generic=self.get_is_generic(rule))
@@ -106,7 +112,7 @@ class RuleConverter:
     def get_severity(self, rule: RawSecurityRule) -> str:
         raise NotImplementedError
 
-    def get_cwe(self, rule: RawSecurityRule) -> List[str]:
+    def get_cwes(self, rule: RawSecurityRule) -> List[str]:
         raise NotImplementedError
 
     def get_languages(self, rule: RawSecurityRule) -> List[str]:
@@ -136,14 +142,12 @@ class SonarQubeRuleConverter(RuleConverter):
         }
         return severity_map[rule.metadata['defaultSeverity']]
 
-    def get_cwe(self, rule: RawSecurityRule) -> List[str]:
+    def get_cwes(self, rule: RawSecurityRule) -> List[str]:
         security_standards = rule.metadata.get('securityStandards', {})
         return [f'CWE-{cwe}' for cwe in security_standards.get('CWE', [])]
 
     def get_languages(self, rule: RawSecurityRule) -> List[str]:
         languages = [PurePath(rule.path).parent.parts[-1]]
-        if 'javascript' in languages:
-            languages.append('typescript')
         return languages
 
     def get_is_generic(self, rule: RawSecurityRule) -> bool:
@@ -168,7 +172,7 @@ class SemgrepRuleConverter(RuleConverter):
         }
         return severity_map[rule.metadata['severity']]
 
-    def get_cwe(self, rule: RawSecurityRule) -> List[str]:
+    def get_cwes(self, rule: RawSecurityRule) -> List[str]:
         raw_cwes = rule.metadata['metadata'].get('cwe', [])
         cwes = [raw_cwes] if isinstance(raw_cwes, str) else raw_cwes
         return [cwe.split(':')[0] for cwe in cwes]
@@ -201,7 +205,7 @@ class CodeQLRuleConverter(RuleConverter):
             return 'info'
         return severity_map[rule.metadata['problem.severity']]
 
-    def get_cwe(self, rule: RawSecurityRule) -> List[str]:
+    def get_cwes(self, rule: RawSecurityRule) -> List[str]:
         if 'tags' not in rule.metadata:
             logging.warning(f'No tags in {self.data_source} rule {rule.metadata["id"]}')
             return []
@@ -211,8 +215,6 @@ class CodeQLRuleConverter(RuleConverter):
 
     def get_languages(self, rule: RawSecurityRule) -> List[str]:
         languages = [PurePath(rule.metadata['id']).parts[0]]
-        if 'js' in languages:
-            languages.append('ts')
         return languages
 
     def get_is_generic(self, rule: RawSecurityRule) -> bool:
@@ -237,16 +239,12 @@ class JoernRuleConverter(RuleConverter):
             return 'warning'
         return 'error'
 
-    def get_cwe(self, rule: RawSecurityRule) -> List[str]:
+    def get_cwes(self, rule: RawSecurityRule) -> List[str]:
         return []
 
     def get_languages(self, rule: RawSecurityRule) -> List[str]:
         language = PurePath(rule.path).parent.parts[-1]
-        if language == 'android':
-            languages = ['java', 'kotlin']
-        else:
-            languages = [language]
-        return languages
+        return [language]
 
     def get_is_generic(self, rule: RawSecurityRule) -> bool:
         return False
