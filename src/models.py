@@ -17,7 +17,7 @@ class RuleCWE(Base):
     rule_id: Mapped[str] = mapped_column(ForeignKey("comparable_rules.id"))
 
     def __init__(self, cwe: str, owasp_category: str | None):
-        self.cwe = cwe  # CWE-000
+        self.cwe = cwe  # CWE-12
         self.owasp_category = owasp_category  # A01:2021
 
     def __repr__(self):

@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import re
 from datetime import datetime
 from pathlib import PurePath
 from typing import List
@@ -88,8 +89,13 @@ class RuleConverter:
                 new_languages.add('other')  # +'-'+self.data_source+'-'+language)
         return list(new_languages)
 
+    @staticmethod
+    def normalize_cwes(cwes: List[str]) -> List[str]:
+        # remove trailing zeros after the dash
+        return [re.sub(r'-(0+)(\d+)', r'-\2', cwe) for cwe in cwes]
+
     def convert(self, rule: RawSecurityRule, date: datetime) -> ComparableRule:
-        cwes = self._upper_list(self.get_cwes(rule))
+        cwes = self.normalize_cwes(self._upper_list(self.get_cwes(rule)))
         languages = self.normalize_languages(self._lower_list(self.get_languages(rule)))
         owasp_categories = []
         with contextlib.closing(OwaspCweMapper()) as mapper:
