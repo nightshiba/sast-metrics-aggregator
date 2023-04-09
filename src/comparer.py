@@ -35,7 +35,13 @@ def print_corpus_stats(corpus):
 def main():
     s = Session()
 
-    time_dates_to_process = [datetime(2022, 12, 19), datetime(2023, 3, 16)]
+    time_dates_to_process = [
+        datetime(2021, 7, 2),
+        datetime(2021, 11, 13),
+        datetime(2022, 4, 5),
+        datetime(2022, 10, 18),
+        datetime(2023, 4, 4)
+    ]
     sonarqube_available_rules_path = PurePath('misc/community_edition_rule_keys.json')
 
     rule_equalizer = RuleEqualizer()
@@ -46,10 +52,12 @@ def main():
         if not sonarqube_available_rules:
             print('Skipping current date because no SonarQube rules were found')
             continue
-        repos = [SonarQubeRulesRepo(date, sonarqube_available_rules),
-                 SemgrepRulesRepo(date),
-                 CodeQLRulesRepo(date),
-                 JoernRulesRepo(date)]
+        repos = [
+            SonarQubeRulesRepo(date, sonarqube_available_rules),
+            SemgrepRulesRepo(date),
+            CodeQLRulesRepo(date),
+            JoernRulesRepo(date)
+        ]
         for repo in repos:
             print(f'Converting repo {repo.__class__.__name__} at commit {repo.latest_commit[:8]}')
             current_repo_rules = rule_equalizer.convert(repo)
