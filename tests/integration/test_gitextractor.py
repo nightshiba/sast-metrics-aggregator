@@ -1,3 +1,5 @@
+import pytest
+
 from gitextractor import *
 
 
@@ -20,6 +22,18 @@ def test_git_rules_repo_init():
     repo = GitSecurityRulesRepo('https://github.com/octocat/Spoon-Knife', ['*.html'])
     assert 'Spoon-Knife' in repo.cloned_repo_path
     assert 'Fork you' in repo.raw_rules[0].raw_data
+
+
+def test_git_rules_repo_init_with_date():
+    repo = GitSecurityRulesRepo('https://github.com/JareBear12418/Daily-Git-Commit', ['*.yaml'], datetime(2022, 2, 4))
+    assert 'Daily-Git-Commit' in repo.cloned_repo_path
+    assert 'February 03' in repo.raw_rules[0].raw_data
+    print(repo.latest_commit)
+
+
+def test_git_rules_repo_init_with_nonexistent_date():
+    with pytest.raises(ValueError):
+        GitSecurityRulesRepo('https://github.com/JareBear12418/Daily-Git-Commit', ['*.yaml'], datetime(2021, 2, 10))
 
 
 def test_sonarqube_rules_repo_init():

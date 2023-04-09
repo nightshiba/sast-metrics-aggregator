@@ -1,5 +1,6 @@
 import contextlib
 import logging
+from datetime import datetime
 from pathlib import PurePath
 from typing import List
 
@@ -27,7 +28,8 @@ class RuleEqualizer:
             rule_converter = self.joern_converter
         else:
             raise NotImplementedError
-        return list(map(rule_converter.convert, rules_repo.raw_rules))
+        return list(
+            map(rule_converter.convert, rules_repo.raw_rules, [rules_repo.checkout_date] * len(rules_repo.raw_rules)))
 
 
 class RuleConverter:
@@ -86,7 +88,7 @@ class RuleConverter:
                 new_languages.add('other')  # +'-'+self.data_source+'-'+language)
         return list(new_languages)
 
-    def convert(self, rule: RawSecurityRule) -> ComparableRule:
+    def convert(self, rule: RawSecurityRule, date: datetime) -> ComparableRule:
         cwes = self._upper_list(self.get_cwes(rule))
         languages = self.normalize_languages(self._lower_list(self.get_languages(rule)))
         owasp_categories = []
@@ -94,7 +96,8 @@ class RuleConverter:
             owasp_categories = [mapper.fetch_short_mapping(cwe) for cwe in cwes]
         return ComparableRule(
             rule_id=rule.id,
-            name=self.get_name(rule),
+            date=date,
+            title=self.get_title(rule),
             description=self.get_description(rule),
             severity=self.get_severity(rule),
             cwes=cwes,
@@ -103,7 +106,7 @@ class RuleConverter:
             data_source=self.data_source,
             is_generic=self.get_is_generic(rule))
 
-    def get_name(self, rule: RawSecurityRule) -> str:
+    def get_title(self, rule: RawSecurityRule) -> str:
         raise NotImplementedError
 
     def get_description(self, rule: RawSecurityRule) -> str:
@@ -126,7 +129,7 @@ class SonarQubeRuleConverter(RuleConverter):
     def __init__(self):
         super().__init__('sonarqube')
 
-    def get_name(self, rule: RawSecurityRule) -> str:
+    def get_title(self, rule: RawSecurityRule) -> str:
         return rule.metadata['title']
 
     def get_description(self, rule: RawSecurityRule) -> str:
@@ -158,7 +161,7 @@ class SemgrepRuleConverter(RuleConverter):
     def __init__(self):
         super().__init__('semgrep')
 
-    def get_name(self, rule: RawSecurityRule) -> str:
+    def get_title(self, rule: RawSecurityRule) -> str:
         return rule.metadata['id']
 
     def get_description(self, rule: RawSecurityRule) -> str:
@@ -188,7 +191,7 @@ class CodeQLRuleConverter(RuleConverter):
     def __init__(self):
         super().__init__('codeql')
 
-    def get_name(self, rule: RawSecurityRule) -> str:
+    def get_title(self, rule: RawSecurityRule) -> str:
         return rule.metadata['name']
 
     def get_description(self, rule: RawSecurityRule) -> str:
@@ -225,7 +228,7 @@ class JoernRuleConverter(RuleConverter):
     def __init__(self):
         super().__init__('joern')
 
-    def get_name(self, rule: RawSecurityRule) -> str:
+    def get_title(self, rule: RawSecurityRule) -> str:
         return rule.metadata['title']
 
     def get_description(self, rule: RawSecurityRule) -> str:

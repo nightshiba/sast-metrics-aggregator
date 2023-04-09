@@ -4,6 +4,7 @@ import logging
 import re
 import shutil
 import tempfile
+from datetime import datetime
 from pathlib import PurePath
 from typing import List
 
@@ -15,6 +16,10 @@ from misc.extract_sonarqube_available_rules import AvailableRuleKeys
 
 
 class RawSecurityRule:
+    """
+    Represents a parsed file containing a security rule.
+    """
+
     def __init__(self, blob: git.Blob):
         self.path = blob.path
         self.raw_data = blob.data_stream.read().decode('utf-8')
@@ -27,11 +32,21 @@ class GitSecurityRulesRepo:
     A wrapper for a git repository containing security rules.
     """
 
-    def __init__(self, repo_upstream: str, rules_glob: List[str]):
+    def __init__(self, repo_upstream: str, rules_glob: List[str], checkout_date: datetime = None):
         self.repo_upstream = repo_upstream
         self.repo_name = repo_upstream.split('/')[-1]
         self.cloned_repo_path = self._get_tmp_repo_path(self.repo_name)
         self.repo = git.Repo.clone_from(repo_upstream, self.cloned_repo_path)
+        if checkout_date is None:
+            self.checkout_date = datetime.now()
+        else:
+            self.checkout_date = checkout_date
+            latest_commit_before = self.repo.git.rev_list('-1', '--before', checkout_date.strftime('%Y-%m-%d'), 'HEAD')
+            if latest_commit_before:
+                self.repo.git.checkout(latest_commit_before)
+            else:
+                logging.warning(f'No commits found before {checkout_date} in {self.repo_name}')
+                raise ValueError
         self.latest_commit = self.repo.head.commit.hexsha
         self.raw_rules = self.get_raw_rules(rules_glob)
         self.update_raw_rules_metadata()
@@ -60,9 +75,9 @@ class GitSecurityRulesRepo:
 
 
 class SonarQubeRulesRepo(GitSecurityRulesRepo):
-    def __init__(self, extracted_available_rule_keys: AvailableRuleKeys = None):
+    def __init__(self, checkout_date: datetime = None, extracted_available_rule_keys: AvailableRuleKeys = None):
+        super().__init__('https://github.com/SonarSource/rspec', ['rules/**/metadata.json'], checkout_date)
         self.available_rule_keys = extracted_available_rule_keys
-        super().__init__('https://github.com/SonarSource/rspec', ['rules/**/metadata.json'])
         if self.available_rule_keys:  # filter out unavailable rules after rule ids are updated
             self.raw_rules = self.filter_available_rules(self.raw_rules, self.available_rule_keys)
 
@@ -107,9 +122,10 @@ class SonarQubeRulesRepo(GitSecurityRulesRepo):
 
 
 class SemgrepRulesRepo(GitSecurityRulesRepo):
-    def __init__(self):
+    def __init__(self, checkout_date: datetime = None):
         super().__init__('https://github.com/returntocorp/semgrep-rules',
-                         ['**/security/**/*.y*ml', '**/audit/**/*.y*ml'])
+                         ['**/security/**/*.y*ml', '**/audit/**/*.y*ml'],
+                         checkout_date)
 
     @staticmethod
     def is_yaml_lang_rule(raw_rule: RawSecurityRule) -> bool:
@@ -148,8 +164,8 @@ class SemgrepRulesRepo(GitSecurityRulesRepo):
 
 
 class CodeQLRulesRepo(GitSecurityRulesRepo):
-    def __init__(self):
-        super().__init__('https://github.com/github/codeql', ['**/ql/src/**/*.ql'])
+    def __init__(self, checkout_date: datetime = None):
+        super().__init__('https://github.com/github/codeql', ['**/ql/src/**/*.ql'], checkout_date)
 
     @staticmethod
     def is_rule(raw_rule: RawSecurityRule) -> bool:
@@ -192,8 +208,10 @@ class CodeQLRulesRepo(GitSecurityRulesRepo):
 
 
 class JoernRulesRepo(GitSecurityRulesRepo):
-    def __init__(self):
-        super().__init__('https://github.com/joernio/joern', ['querydb/src/main/**/scanners/*/**/*.scala'])
+    def __init__(self, checkout_date: datetime = None):
+        super().__init__('https://github.com/joernio/joern',
+                         ['querydb/src/main/**/scanners/*/**/*.scala'],
+                         checkout_date)
 
     @staticmethod
     def load_scala(scala_raw_data: str) -> List[dict]:

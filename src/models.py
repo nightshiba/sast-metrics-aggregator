@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import List
 
-from sqlalchemy import Column, ForeignKey, Integer, String, Boolean
+from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapped_column, Mapped
 from sqlalchemy.orm import relationship
@@ -48,8 +49,10 @@ class RuleLanguage(Base):
 
 class ComparableRule(Base):
     __tablename__ = 'comparable_rules'
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(Integer, primary_key=True)
     name = Column(String, nullable=False)
+    date = Column(DateTime, nullable=False)
+    title = Column(String, nullable=False)
     description = Column(String, nullable=False)
     severity = Column(String, nullable=False)
     cwes: Mapped[List[RuleCWE]] = relationship(backref="rule_cwe")
@@ -57,10 +60,11 @@ class ComparableRule(Base):
     data_source = Column(String, nullable=False)
     is_generic = Column(Boolean, nullable=False)
 
-    def __init__(self, rule_id: str, name: str, description: str, severity: str, languages: List[str],
+    def __init__(self, rule_id: str, date: datetime, title: str, description: str, severity: str, languages: List[str],
                  cwes: List[str], owasp_categories: List[str | None], is_generic: bool, data_source: str):
-        self.id = rule_id
-        self.name = name
+        self.name = rule_id
+        self.date = date
+        self.title = title
         self.description = description
         self.severity = severity  # error, warning, info
         self.cwes = list(map(RuleCWE, cwes, owasp_categories))

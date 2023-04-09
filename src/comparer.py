@@ -1,4 +1,5 @@
 from collections import Counter
+from datetime import datetime
 from pathlib import PurePath
 
 from sqlalchemy import create_engine
@@ -19,24 +20,7 @@ def init_db():
     Base.metadata.create_all(engine)
 
 
-def main():
-    s = Session()
-
-    time_dates_to_process = ['2022-12-19', '2023-03-16']
-    commit_hashes_per_repo_to_process = []
-    sonarqube_available_rules_path = PurePath('misc/community_edition_rule_keys.json')
-    sonarqube_available_rules = get_rules_for_release_date(sonarqube_available_rules_path, time_dates_to_process[1])
-    # TODO get sonarqube rules for the given time dates
-    # TODO init repos for each commit hashes (and available rules for sonarqube)
-    repos = [SonarQubeRulesRepo(sonarqube_available_rules), SemgrepRulesRepo(), CodeQLRulesRepo(), JoernRulesRepo()]
-    rule_equalizer = RuleEqualizer()
-    corpus = []
-    for repo in repos:
-        print('Processing repo: {}'.format(repo.__class__.__name__))
-        rules = rule_equalizer.convert(repo)
-        corpus.extend(rules)
-        s.add_all(rules)
-
+def print_corpus_stats(corpus):
     unique_languages = set()
     rules_by_language_counter = Counter()
     for rule in corpus:
@@ -47,6 +31,32 @@ def main():
     print(sorted(unique_languages))
     print(rules_by_language_counter)
 
+
+def main():
+    s = Session()
+
+    time_dates_to_process = [datetime(2022, 12, 19), datetime(2023, 3, 16)]
+    sonarqube_available_rules_path = PurePath('misc/community_edition_rule_keys.json')
+
+    rule_equalizer = RuleEqualizer()
+    for date in time_dates_to_process:
+        corpus = []
+        print(f'\nProcessing date {date}')
+        sonarqube_available_rules = get_rules_for_release_date(sonarqube_available_rules_path, date)
+        if not sonarqube_available_rules:
+            print('Skipping current date because no SonarQube rules were found')
+            continue
+        repos = [SonarQubeRulesRepo(date, sonarqube_available_rules),
+                 SemgrepRulesRepo(date),
+                 CodeQLRulesRepo(date),
+                 JoernRulesRepo(date)]
+        for repo in repos:
+            print(f'Converting repo {repo.__class__.__name__} at commit {repo.latest_commit[:8]}')
+            current_repo_rules = rule_equalizer.convert(repo)
+            corpus.extend(current_repo_rules)
+            s.add_all(current_repo_rules)
+        print_corpus_stats(corpus)
+
     s.commit()
     s.close()
 
@@ -54,5 +64,3 @@ def main():
 if __name__ == '__main__':
     init_db()
     main()
-
-# Counter({'other': 517, 'python': 422, 'javascript': 403, 'java': 379, 'terraform': 301, 'typescript': 197, 'ruby': 164, 'php': 158, 'c#': 133, 'go': 126, 'c++': 98, 'c': 87, 'kotlin': 71, 'swift': 61, 'vb.net': 59, 'scala': 54, 'rust': 38, 'xml': 38, 'html': 34, 'dockerfile': 26, 'css': 21, 'json': 5, 'bash': 4, 'yaml': 4})

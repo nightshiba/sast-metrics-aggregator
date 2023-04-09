@@ -3,6 +3,7 @@ import getpass
 import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import PurePath
 from typing import TypedDict, List, Any
 
@@ -24,11 +25,12 @@ class AvailableRules(TypedDict):
 AvailableRuleKeys = List[str]
 
 
-def get_rules_for_release_date(available_rules_path: PurePath, release_date: str) -> AvailableRuleKeys:
+def get_rules_for_release_date(available_rules_path: PurePath, release_date: datetime) -> AvailableRuleKeys:
     with open(available_rules_path, 'r') as f:
         available_rules = json.load(f)
+    release_date_str = release_date.strftime('%Y-%m-%d')
     return [rule_key for rule_key, rule_data in available_rules.items()
-            if release_date in rule_data['presented_in_release_date']]
+            if release_date_str in rule_data['presented_in_release_date']]
 
 
 def main():
