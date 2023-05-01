@@ -29,8 +29,12 @@ def get_rules_for_release_date(available_rules_path: PurePath, release_date: dat
     with open(available_rules_path, 'r') as f:
         available_rules = json.load(f)
     release_date_str = release_date.strftime('%Y-%m-%d')
-    return [rule_key for rule_key, rule_data in available_rules.items()
-            if release_date_str in rule_data['presented_in_release_date']]
+    available_rule_keys = []
+    for rule_key, rule_data in available_rules.items():
+        if release_date_str in rule_data['presented_in_release_date']:
+            rspec_rule_key = f'{rule_data["rspec_language"]}:{rule_key.split(":")[1]}'
+            available_rule_keys.append(rspec_rule_key)
+    return available_rule_keys
 
 
 def main():
@@ -68,6 +72,22 @@ def load_available_rules(available_rules_path: str) -> AvailableRules:
     return available_rules
 
 
+def rspec_language_mapper(language: str, rule_key: str) -> str:
+    valid_rspec_languages = ['abap', 'apex', 'cfamily', 'cobol', 'csharp', 'css', 'docker', 'flex', 'go', 'html', 'java', 'javascript', 'kotlin', 'php', 'pli', 'plsql', 'python', 'rpg', 'ruby', 'rust', 'scala', 'secrets', 'solidity', 'swift', 'text', 'tsql', 'vb6', 'vbnet', 'cloudformation', 'terraform', 'kubernetes', 'xml']
+
+    # map language to rspec language
+    if language == 'c#':
+        language = 'csharp'
+    elif language == 'vb.net':
+        language = 'vbnet'
+    elif language == 'typescript':
+        language = 'javascript'
+
+    if language in valid_rspec_languages:
+        return language
+    logging.warning(f'There is no rspec for language {language} (rule key {rule_key}), skipping')
+
+
 def extract_available_rules_for_release_date(api_url: str, release_date: str) -> AvailableRules:
     available_rules = {}
     page = 1
@@ -78,8 +98,12 @@ def extract_available_rules_for_release_date(api_url: str, release_date: str) ->
             sys.exit(1)
         response_json = response.json()
         for rule in response_json['rules']:
+            rspec_language = rspec_language_mapper(rule['langName'].lower(), rule['key'])
+            if rspec_language is None:
+                continue
             available_rules[rule['key']] = {
                 'presented_in_release_date': [release_date],
+                'rspec_language': rspec_language,
                 # 'html_description': rule['htmlDesc'],
             }
         if response_json['total'] <= page * 500:
@@ -93,6 +117,7 @@ def merge_available_rules(existing_available_rules: AvailableRules,
     for rule_key, rule in fetched_release_available_rules.items():
         if rule_key in existing_available_rules:
             existing_available_rules[rule_key]['presented_in_release_date'].append(rule['presented_in_release_date'][0])
+            existing_available_rules[rule_key]['rspec_language'] = rule['rspec_language']
         else:
             existing_available_rules[rule_key] = rule
         existing_available_rules[rule_key]['presented_in_release_date'] = sorted(

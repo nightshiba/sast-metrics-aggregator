@@ -55,7 +55,7 @@ class RuleConverter:
             'kotlin/java': ['java', 'kotlin', 'kt', 'android'],
             # CodeQL doesn't distinguish between JavaScript and TypeScript
             'js/ts': ['js', 'ts', 'javascript', 'typescript'],
-            'c#': ['csharp'],
+            'c#': ['csharp', 'cs'],
             'python': ['py'],
             'ruby': ['rb'],
             'go': [],
