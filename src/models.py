@@ -51,7 +51,7 @@ class ComparableRule(Base):
     __tablename__ = 'comparable_rules'
     id: Mapped[str] = mapped_column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    date = Column(DateTime, nullable=False)
+    date = Column(DateTime, nullable=False)  # date for which the rule was fetched
     title = Column(String, nullable=False)
     description = Column(String, nullable=False)
     severity = Column(String, nullable=False)
